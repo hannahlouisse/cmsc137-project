@@ -6,7 +6,7 @@ public class GameState {
 
     //Game Phases
     public enum GamePhase {
-        WORD_GIVING, VOTING, GAME_OVER
+        WORD_SUBMITTING, VOTING, GAME_OVER
     }
     
     private List<Player> players; //List of current players
@@ -19,7 +19,7 @@ public class GameState {
         this.players = players;
         this.secretWord = secretWord;
         this.currentRound = 1;
-        this.phase = GamePhase.WORD_GIVING;
+        this.phase = GamePhase.WORD_SUBMITTING;
     }
 
     //GETTERS
