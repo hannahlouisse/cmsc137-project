@@ -23,3 +23,14 @@
 hs_err_pid*
 replay_pid*
 /bin/
+/build/
+/out/
+/target/
+
+# OS junk
+.DS_Store
+
+# Eclipse files
+.classpath
+.project
+.settings/
