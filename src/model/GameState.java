@@ -8,7 +8,7 @@ public class GameState {
 
     //Game Phases
     public enum GamePhase {
-        WORD_SUBMITTING, VOTING, GAME_OVER
+        WORD_SUBMITTING, VOTING, GAME_OVER, TIEBREAKER
     }
     
     private List<Player> players; //List of current players
