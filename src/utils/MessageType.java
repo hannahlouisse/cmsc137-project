@@ -1,5 +1,15 @@
 package utils;
 
 public enum MessageType {
-
+	JOIN,
+	START_GAME,
+	SEND_WORD,
+	SEND_SECRET,
+	SEND_STATEMENT,
+	VOTE,
+	PLAYER_ELIMINATED,
+	PHASE_CHANGE,
+	CREWMATES_WIN,
+	IMPOSTOR_WINS,
+	TURN
 }
