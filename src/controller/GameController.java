@@ -14,7 +14,6 @@ public class GameController {
 	
 	//Hash maps for tallying and storing
 	private Map<String, Integer> voteTally = new HashMap<>(); //Voting proper
-	private Set<String> playersWhoVoted = new HashSet<>();
 	
 	//Tiebreaker voting storage
 	//private Map<Player, Integer> tiebreakerTally = new HashMap<>();
@@ -121,6 +120,7 @@ public class GameController {
 	    List<Message> messages = new ArrayList<>();
 	    String voter = message.getSender();
 	    String vote = message.getContent();
+	    Set<String> playersWhoVoted = new HashSet<>();
 	    
 	    //Error if voter sends a SEND_VOTE again
 	    if (playersWhoVoted.contains(voter)) {
@@ -290,7 +290,7 @@ public class GameController {
 		
 		state.nextRound();
 		resetSubmittedWords();
-		playersWhoVoted.clear();
+		//playersWhoVoted.clear();
 		messages.add(new Message(MessageType.PHASE_CHANGE, GameState.GamePhase.WORD_SUBMITTING.name()));
 		
 		return messages;
