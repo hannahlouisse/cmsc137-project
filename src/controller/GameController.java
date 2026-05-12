@@ -290,6 +290,7 @@ public class GameController {
 		
 		state.nextRound();
 		resetSubmittedWords();
+		playersWhoVoted.clear();
 		messages.add(new Message(MessageType.PHASE_CHANGE, GameState.GamePhase.WORD_SUBMITTING.name()));
 		
 		return messages;
