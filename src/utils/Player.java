@@ -1,4 +1,4 @@
-package model;
+package utils;
 
 public class Player {
 	//Roles of player. Can be accessed using Player.Role.IMPOSTOR or Player.Role.CREWMATE

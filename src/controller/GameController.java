@@ -1,8 +1,9 @@
 package controller;
 
 import model.GameState;
-import model.Player;
-import utils.WordDictionary;
+import model.WordDictionary;
+import utils.Player;
+
 import java.util.*;
 
 public class GameController {

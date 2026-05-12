@@ -2,6 +2,8 @@ package model;
 
 import java.util.List;
 
+import utils.Player;
+
 public class GameState {
 
     //Game Phases
