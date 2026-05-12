@@ -11,5 +11,6 @@ public enum MessageType {
 	PHASE_CHANGE,
 	CREWMATES_WIN,
 	IMPOSTOR_WINS,
-	TURN
+	TURN,
+	ERROR
 }
