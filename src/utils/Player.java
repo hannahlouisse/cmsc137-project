@@ -1,7 +1,11 @@
 package utils;
 
-public class Player {
-	//Roles of player. Can be accessed using Player.Role.IMPOSTOR or Player.Role.CREWMATE
+import java.io.Serializable;
+
+public class Player implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    //Roles of player. Can be accessed using Player.Role.IMPOSTOR or Player.Role.CREWMATE
     public enum Role {
         IMPOSTOR, CREWMATE
     }
@@ -10,7 +14,7 @@ public class Player {
     private Role role;
     private boolean eliminated; //Variable to check if eliminated or not
     private String submittedWord; //Variable for word submitted
-    
+
     //Setting up player
     public Player(String name) {
         this.name = name;
@@ -18,30 +22,29 @@ public class Player {
         this.eliminated = false;
         this.submittedWord = null;
     }
-    
-    
+
     //GETTERS
     public String getName() {
-    	return name;
+        return name;
     }
     public Role getRole() {
-    	return role;
+        return role;
     }
     public boolean isEliminated() {
-    	return eliminated;
+        return eliminated;
     }
     public String getSubmittedWord() {
-    	return submittedWord;
+        return submittedWord;
     }
-    
+
     //SETTERS
     public void setRole(Role role) {
-    	this.role = role;
+        this.role = role;
     }
     public void setEliminated(boolean eliminated) {
-    	this.eliminated = eliminated;
+        this.eliminated = eliminated;
     }
     public void setSubmittedWord(String word) {
-    	this.submittedWord = word;
+        this.submittedWord = word;
     }
 }

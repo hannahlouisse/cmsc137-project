@@ -5,299 +5,495 @@ import model.WordDictionary;
 import utils.Player;
 import utils.Message;
 import utils.MessageType;
+import server.GameServer;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class GameController {
 	//Current value of a given game state
 	private GameState state;
-	
-	//Hash maps for tallying and storing
-	private Map<String, Integer> voteTally = new HashMap<>(); //Voting proper
-	
-	//Tiebreaker voting storage
-	//private Map<Player, Integer> tiebreakerTally = new HashMap<>();
-	//private Map<Player, Integer> statements = new HashMap<>();
-	//List<Player> tiebreakerVoters = new ArrayList<>();
-	
-	//Set up the game, assign roles, and words
-	public GameController(String[] names) { //holds all players 
-		List<Player> players = new ArrayList<>(); //Array list for dynamic changing. Stores non-eliminated players
-		for (String name : names ) {
+	private GameServer server;
+	private Map<String, String> votes;
+	private Map<String, String> tieStatements;
+	private String impostorName;
+	private boolean turnCompleted;
+	private int submittedCount;
+	private int voteCount;
+	private int statementCount;
+	private int tieVoteCount;
+	private boolean votingComplete;
+	private Object voteLock = new Object();
+
+	public GameController(String[] names, GameServer server) {
+		this.server = server;
+		this.votes = new HashMap<>();
+		this.tieStatements = new HashMap<>();
+
+		List<Player> players = new ArrayList<>();
+		for (String name : names) {
 			players.add(new Player(name));
 		}
-		
-		//Assign secret word
+
 		String secretWord = WordDictionary.getRandomWord();
-		
-		//Assign impostor
+
 		Random rand = new Random();
 		int impostorIndex = rand.nextInt(players.size());
 		players.get(impostorIndex).setRole(Player.Role.IMPOSTOR);
-		
+		this.impostorName = players.get(impostorIndex).getName();
+
 		this.state = new GameState(players, secretWord);
+
+		System.out.println("\n=========================================");
+		System.out.println("GAME INITIALIZED");
+		System.out.println("Secret Word: " + secretWord);
+		System.out.println("Impostor: " + impostorName);
+		System.out.println("Players: " + String.join(", ", names));
+		System.out.println("=========================================\n");
 	}
-	
-	//Called by GameServer
-	//Returns messages to be sent to server then to clients
-	public List<Message> start () {
-		List<Message> messages = new ArrayList<>();
-		
-		for (Player player : state.getPlayers()) {
+
+	public void startNetworkGame() {
+		while (state.getPhase() != GameState.GamePhase.GAME_OVER) {
+			System.out.println("\n========== ROUND " + state.getCurrentRound() + " ==========");
+
+			state.setPhase(GameState.GamePhase.WORD_SUBMITTING);
+			broadcastPhaseChange("WORD_SUBMITTING");
+			wordSubmissionPhase();
+
+			state.setPhase(GameState.GamePhase.VOTING);
+			broadcastPhaseChange("VOTING");
+			votingPhase();
+
+			if (checkGameOver()) {
+				break;
+			}
+
+			state.nextRound();
+		}
+	}
+
+	private void wordSubmissionPhase() {
+		List<Player> activePlayers = state.getActivePlayers();
+		state.resetTurns();
+		submittedCount = 0;
+
+		for (Player player : activePlayers) {
 			if (player.getRole() == Player.Role.CREWMATE) {
-				messages.add(new Message(MessageType.SEND_SECRET, player.getName(), state.getSecretWord()));
-			} else { //If impostor, don't send secret word
-				messages.add(new Message(MessageType.SEND_SECRET, player.getName(), "???"));
+				sendToPlayer(player.getName(), new Message(MessageType.SEND_SECRET, state.getSecretWord()));
+			} else {
+				sendToPlayer(player.getName(), new Message(MessageType.SEND_SECRET, "??? (You are the IMPOSTOR!)"));
 			}
 		}
-		
-		//After roles and secret words are given
-		messages.add(new Message(MessageType.PHASE_CHANGE, "WORD_SUBMITTING"));
-		
-		//Return the messages that will be sent to the clients
-		return messages;
+
+		server.broadcast(new Message(MessageType.SEND_WORD, "\n========== WORD SUBMISSION PHASE =========="));
+
+		while (!state.isAllTurnsComplete()) {
+			Player currentPlayer = state.getCurrentPlayer();
+			if (currentPlayer == null) break;
+
+			turnCompleted = false;
+
+			System.out.println("[GAME] " + currentPlayer.getName() + "'s turn");
+			server.broadcast(new Message(MessageType.TURN, currentPlayer.getName(), "is now describing the word..."));
+			sendToPlayer(currentPlayer.getName(),
+					new Message(MessageType.TURN, "YOUR TURN! Enter a word related to the secret word (cannot be the secret word itself):"));
+
+			while (!turnCompleted) {
+				try { Thread.sleep(100); } catch (InterruptedException e) { return; }
+			}
+
+			state.nextTurn();
+		}
+
+		System.out.println("[GAME] All words submitted!");
+		server.broadcast(new Message(MessageType.SEND_WORD, "\n========== ALL WORDS SUBMITTED =========="));
+		showSubmittedWordsSummary();
 	}
-	
-	//GAME FUNCTIONS
-	//Processes the messages received from server
-	public List<Message> processMessage(Message message) {
-		switch(message.getType()) {
-			case SEND_WORD -> {
-				return wordGivingPhase(message);
+
+	private void votingPhase() {
+		List<Player> activePlayers = state.getActivePlayers();
+		int totalActivePlayers = activePlayers.size();
+		voteCount = 0;
+		votes.clear();
+		votingComplete = false;
+
+		System.out.println("[GAME] Starting voting phase with " + totalActivePlayers + " players");
+		server.broadcast(new Message(MessageType.SEND_WORD, "\n========== VOTING PHASE =========="));
+
+		List<String> votableNames = activePlayers.stream().map(Player::getName).collect(Collectors.toList());
+		String votableList = String.join(", ", votableNames);
+
+		server.broadcast(new Message(MessageType.SEND_WORD, "Vote for who you think is the impostor!"));
+		server.broadcast(new Message(MessageType.SEND_WORD, "Options: " + votableList));
+
+		// Send voting prompts to all players
+		for (Player voter : activePlayers) {
+			sendToPlayer(voter.getName(), new Message(MessageType.VOTE, "Your turn to vote. Options: " + votableList));
+		}
+
+		System.out.println("[GAME] Waiting for " + totalActivePlayers + " votes...");
+
+		// Wait for all votes
+		synchronized (voteLock) {
+			while (voteCount < totalActivePlayers) {
+				try {
+					voteLock.wait(1000);
+					System.out.println("[GAME] Votes received: " + voteCount + "/" + totalActivePlayers);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					return;
+				}
 			}
-			case VOTE -> {
-				return votingPhase(message);
+		}
+
+		System.out.println("[GAME] All votes received! Tallying results...");
+
+		// Tally votes
+		Map<String, Integer> voteTally = new HashMap<>();
+		for (Player player : activePlayers) {
+			voteTally.put(player.getName(), 0);
+		}
+
+		for (Map.Entry<String, String> entry : votes.entrySet()) {
+			String votedFor = entry.getValue();
+			if (voteTally.containsKey(votedFor)) {
+				voteTally.put(votedFor, voteTally.get(votedFor) + 1);
 			}
-			case SEND_STATEMENT -> {
-				return new ArrayList<>(); //PLACEHOLDER 
+		}
+
+		// Broadcast vote results
+		server.broadcast(new Message(MessageType.SEND_WORD, "\n========== VOTE RESULTS =========="));
+		for (Map.Entry<String, Integer> entry : voteTally.entrySet()) {
+			String result = entry.getKey() + ": " + entry.getValue() + " votes";
+			server.broadcast(new Message(MessageType.SEND_WORD, result));
+			System.out.println(result);
+		}
+
+		// Find max votes
+		int maxVotes = Collections.max(voteTally.values());
+		List<String> tiedPlayers = new ArrayList<>();
+		for (Map.Entry<String, Integer> entry : voteTally.entrySet()) {
+			if (entry.getValue() == maxVotes) {
+				tiedPlayers.add(entry.getKey());
 			}
-			default -> {
-				return new ArrayList<>();
+		}
+
+		String eliminatedPlayer;
+
+		if (tiedPlayers.size() > 1) {
+			System.out.println("[GAME] Tie detected between: " + String.join(", ", tiedPlayers));
+			server.broadcast(new Message(MessageType.SEND_WORD, "\n[TIE] Tie detected between: " + String.join(", ", tiedPlayers)));
+			eliminatedPlayer = tiebreakerPhase(tiedPlayers);
+		} else {
+			eliminatedPlayer = tiedPlayers.get(0);
+			System.out.println("[GAME] Player eliminated: " + eliminatedPlayer);
+			server.broadcast(new Message(MessageType.SEND_WORD, "\n[ELIMINATED] " + eliminatedPlayer));
+		}
+
+		// Eliminate player
+		for (Player player : state.getActivePlayers()) {
+			if (player.getName().equals(eliminatedPlayer)) {
+				player.setEliminated(true);
+				break;
+			}
+		}
+
+		server.broadcast(new Message(MessageType.PLAYER_ELIMINATED, eliminatedPlayer));
+		try { Thread.sleep(2000); } catch (InterruptedException e) {}
+	}
+
+	private String tiebreakerPhase(List<String> tiedPlayers) {
+		state.setPhase(GameState.GamePhase.TIEBREAKER);
+		broadcastPhaseChange("TIEBREAKER");
+
+		System.out.println("[GAME] TIEBREAKER ROUND");
+		server.broadcast(new Message(MessageType.SEND_STATEMENT, "\n========== TIEBREAKER ROUND =========="));
+		server.broadcast(new Message(MessageType.SEND_STATEMENT, "Tied players: " + String.join(", ", tiedPlayers)));
+
+		// Reset for tiebreaker
+		tieStatements.clear();
+		statementCount = 0;
+		votes.clear(); // Clear previous votes
+		tieVoteCount = 0;
+
+		// Get defense statements from tied players
+		for (String playerName : tiedPlayers) {
+			server.broadcast(new Message(MessageType.SEND_STATEMENT, playerName + " is now defending..."));
+			sendToPlayer(playerName,
+					new Message(MessageType.SEND_STATEMENT, "Defend yourself! Why should you not be eliminated? Enter your statement:"));
+		}
+
+		// Wait for statements (30 seconds max)
+		int maxWait = 30;
+		while (statementCount < tiedPlayers.size() && maxWait > 0) {
+			try {
+				Thread.sleep(1000);
+				maxWait--;
+				System.out.println("[GAME] Waiting for statements... " + statementCount + "/" + tiedPlayers.size());
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				break;
+			}
+		}
+
+		// If any player didn't submit, add default statement
+		for (String playerName : tiedPlayers) {
+			if (!tieStatements.containsKey(playerName)) {
+				tieStatements.put(playerName, "[No statement provided]");
+				System.out.println("[GAME] " + playerName + " did not submit a statement");
+			}
+		}
+
+		// Broadcast all defense statements
+		server.broadcast(new Message(MessageType.SEND_STATEMENT, "\n--- DEFENSE STATEMENTS ---"));
+		for (Map.Entry<String, String> entry : tieStatements.entrySet()) {
+			server.broadcast(new Message(MessageType.SEND_STATEMENT, entry.getKey() + ": \"" + entry.getValue() + "\""));
+		}
+
+		// Tiebreaker voting - ALL active players vote
+		List<Player> activePlayers = state.getActivePlayers();
+		List<String> voters = activePlayers.stream().map(Player::getName).collect(Collectors.toList());
+		int totalVoters = voters.size();
+
+		String votableList = String.join(", ", tiedPlayers);
+
+		System.out.println("[GAME] Tiebreaker - Total voters: " + totalVoters);
+		System.out.println("[GAME] Tiebreaker - Voters list: " + voters);
+		System.out.println("[GAME] Tiebreaker - Candidates (valid votes): " + tiedPlayers);
+
+		server.broadcast(new Message(MessageType.SEND_STATEMENT, "\n--- TIEBREAKER VOTE ---"));
+		server.broadcast(new Message(MessageType.SEND_STATEMENT, "All players must now vote for the impostor."));
+		server.broadcast(new Message(MessageType.SEND_STATEMENT, "Valid options: " + votableList));
+		server.broadcast(new Message(MessageType.SEND_STATEMENT, "You must type the EXACT name from the options above!"));
+
+		// Send vote prompts to EACH voter individually
+		for (String voter : voters) {
+			String voteMessage = "Your turn to vote. Valid options: " + votableList;
+			sendToPlayer(voter, new Message(MessageType.VOTE, voteMessage));
+			System.out.println("[GAME] Sent vote prompt to: " + voter);
+		}
+
+		// Wait for all tiebreaker votes
+		System.out.println("[GAME] Waiting for " + totalVoters + " tiebreaker votes...");
+
+		int waitSeconds = 60;
+		while (tieVoteCount < totalVoters && waitSeconds > 0) {
+			try {
+				Thread.sleep(1000);
+				waitSeconds--;
+				System.out.println("[GAME] Tiebreaker votes received: " + tieVoteCount + "/" + totalVoters);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				break;
+			}
+		}
+
+		System.out.println("[GAME] All tiebreaker votes received or timeout!");
+
+		// Print all votes received for debugging
+		System.out.println("[GAME] All votes in tiebreaker:");
+		for (Map.Entry<String, String> entry : votes.entrySet()) {
+			System.out.println("  " + entry.getKey() + " -> " + entry.getValue());
+		}
+
+		// Count votes for tied players only (ignore invalid votes)
+		Map<String, Integer> tieVotes = new HashMap<>();
+		for (String player : tiedPlayers) {
+			tieVotes.put(player, 0);
+		}
+
+		int invalidVotes = 0;
+		for (Map.Entry<String, String> entry : votes.entrySet()) {
+			String votedFor = entry.getValue();
+			if (tiedPlayers.contains(votedFor)) {
+				tieVotes.put(votedFor, tieVotes.get(votedFor) + 1);
+				System.out.println("[GAME] Valid vote: " + entry.getKey() + " -> " + votedFor);
+			} else {
+				invalidVotes++;
+				System.out.println("[GAME] INVALID vote ignored: " + entry.getKey() + " -> " + votedFor + " (not in options)");
+				// Notify the player who voted invalidly
+				sendToPlayer(entry.getKey(), new Message(MessageType.ERROR, "Invalid vote! You must vote for one of: " + votableList));
+			}
+		}
+
+		if (invalidVotes > 0) {
+			System.out.println("[GAME] " + invalidVotes + " invalid votes were ignored");
+		}
+
+		// Broadcast results
+		server.broadcast(new Message(MessageType.SEND_STATEMENT, "\n--- TIEBREAKER RESULTS ---"));
+		for (Map.Entry<String, Integer> entry : tieVotes.entrySet()) {
+			String result = entry.getKey() + ": " + entry.getValue() + " votes";
+			server.broadcast(new Message(MessageType.SEND_STATEMENT, result));
+			System.out.println(result);
+		}
+
+		if (invalidVotes > 0) {
+			server.broadcast(new Message(MessageType.SEND_STATEMENT, "\n[WARNING] " + invalidVotes + " invalid votes were ignored!"));
+		}
+
+		// Find eliminated player (player with most valid votes)
+		int maxVotes = Collections.max(tieVotes.values());
+		List<String> eliminatedCandidates = new ArrayList<>();
+		for (Map.Entry<String, Integer> entry : tieVotes.entrySet()) {
+			if (entry.getValue() == maxVotes) {
+				eliminatedCandidates.add(entry.getKey());
+			}
+		}
+
+		String eliminated;
+		if (eliminatedCandidates.size() > 1) {
+			// Still tied? Randomly eliminate one
+			Random rand = new Random();
+			eliminated = eliminatedCandidates.get(rand.nextInt(eliminatedCandidates.size()));
+			System.out.println("[GAME] Still tied after tiebreaker! Randomly eliminating: " + eliminated);
+			server.broadcast(new Message(MessageType.SEND_STATEMENT, "\n[WARNING] Still tied! Randomly eliminating: " + eliminated));
+		} else {
+			eliminated = eliminatedCandidates.get(0);
+		}
+
+		server.broadcast(new Message(MessageType.SEND_STATEMENT, "\n[RESULT] " + eliminated + " has been eliminated!"));
+
+		// Clear votes after tiebreaker
+		votes.clear();
+
+		return eliminated;
+	}
+
+	private void showSubmittedWordsSummary() {
+		StringBuilder words = new StringBuilder();
+		words.append("\n========== SUBMITTED WORDS ==========\n");
+		for (Player player : state.getActivePlayers()) {
+			words.append(player.getName()).append(": \"").append(player.getSubmittedWord()).append("\"\n");
+		}
+		server.broadcast(new Message(MessageType.SEND_WORD, words.toString()));
+	}
+
+	private boolean checkGameOver() {
+		List<Player> activePlayers = state.getActivePlayers();
+		boolean impostorAlive = activePlayers.stream().anyMatch(p -> p.getRole() == Player.Role.IMPOSTOR);
+
+		if (!impostorAlive) {
+			server.broadcast(new Message(MessageType.CREWMATES_WIN, impostorName));
+			state.setPhase(GameState.GamePhase.GAME_OVER);
+			broadcastPhaseChange("GAME_OVER");
+			return true;
+		}
+
+		if (activePlayers.size() == 2 && impostorAlive) {
+			server.broadcast(new Message(MessageType.IMPOSTOR_WINS, impostorName));
+			state.setPhase(GameState.GamePhase.GAME_OVER);
+			broadcastPhaseChange("GAME_OVER");
+			return true;
+		}
+
+		return false;
+	}
+
+	private void broadcastPhaseChange(String phase) {
+		server.broadcast(new Message(MessageType.PHASE_CHANGE, phase));
+	}
+
+	private void sendToPlayer(String playerName, Message message) {
+		for (server.ClientHandler client : server.getClients()) {
+			if (playerName.equals(client.getPlayerName())) {
+				client.sendMessage(message);
+				break;
 			}
 		}
 	}
-	
-	//Assigns words to players
-	private List<Message> wordGivingPhase(Message message) {
-		List<Message> messages = new ArrayList<>();
-		//Deconstruct message
-		String playerName = message.getSender();
-		String submitted = message.getContent();
-		
-		//Loop the active players and get their submitted word
+
+	public void receiveWord(String playerName, String word) {
 		for (Player player : state.getActivePlayers()) {
 			if (player.getName().equals(playerName)) {
-				if (submitted.isEmpty()) {
-					messages.add(new Message(MessageType.ERROR, "Submitted word cannot be empty. Try again"));
-					return messages;
+				if (player.getRole() == Player.Role.CREWMATE && word.equalsIgnoreCase(state.getSecretWord())) {
+					sendToPlayer(playerName, new Message(MessageType.ERROR, "You cannot submit the secret word!"));
+					return;
 				}
-				
-				if (player.getRole() == Player.Role.CREWMATE && submitted.equalsIgnoreCase(state.getSecretWord())){
-					messages.add(new Message(MessageType.ERROR, "You cannot submit the secret word. Try again"));
-					return messages;
-				}
-				player.setSubmittedWord(submitted);
-				break;	
+
+				player.setSubmittedWord(word);
+				turnCompleted = true;
+				submittedCount++;
+				System.out.println("[GAME] " + playerName + " submitted: " + word);
+				server.broadcast(new Message(MessageType.SEND_WORD, playerName, word));
+				break;
 			}
 		}
-		
-		//Check if all players submitted
-		boolean allSubmitted = state.getActivePlayers().stream().allMatch(p -> p.getSubmittedWord() != null);
-		
-		if (!allSubmitted) {
-			return messages;
-		}
-		
-		//Voting phase, make sure to clear beforehand
-		voteTally.clear();	
-		
-		messages.add(new Message(MessageType.PHASE_CHANGE, GameState.GamePhase.VOTING.name()));
-		return messages;
 	}
-	
-	//Handles voting proper. If tiebreaker, use the tiebreaker() method
-	private List<Message> votingPhase(Message message) {
-	    List<Message> messages = new ArrayList<>();
-	    String voter = message.getSender();
-	    String vote = message.getContent();
-	    Set<String> playersWhoVoted = new HashSet<>();
-	    
-	    //Error if voter sends a SEND_VOTE again
-	    if (playersWhoVoted.contains(voter)) {
-	        messages.add(new Message(MessageType.ERROR, "You already voted"));
-	        return messages;
-	    }
-	    
-	    playersWhoVoted.add(voter);
-	    
-	    //Put voted target and + 1 to their votes.
-	    voteTally.put(vote, voteTally.getOrDefault(vote, 0) + 1);
-	    
-	    //Check if all voted
-	    int totalVotes = voteTally.values().stream().mapToInt(Integer::intValue).sum();
-	    if (totalVotes < state.getActivePlayers().size()) {
-	        ///Return empty list while waiting
-	        return messages;
-	    }
-	    
-	    //Check max votes. Use tiedPlayers to add the max voters/any potential tied players
-	    List <String> tiedPlayers = new ArrayList<>();
-	    int maxVotes = Collections.max(voteTally.values());
-	    
-	    //iterates voteTally and if it is equal to max vote, add name to tiedPlayers
-	    //tiedPlayers can have 1 or more. If only 1, eliminate player meaning it has the max votes
-	    for (Map.Entry<String, Integer> entry : voteTally.entrySet()) {
-	        if (entry.getValue() == maxVotes) {
-	            tiedPlayers.add(entry.getKey());
-	        }
-	    }
-	    
-	    voteTally.clear();
-	    playersWhoVoted.clear();
-	    
-	    //If more than one players tied, start tiebreaker round
-	    if (tiedPlayers.size() > 1) {
-	        /*statements.clear();
-	        tiebreakerTally.clear();
-	        
-	        //Create a hash map of the tied players
-	        /*for (Player player : tiedPlayers) {
-	        	tiebreakerTally.put(player, 0);
-	        
-	        
-	        tiebreakerVoters.clear();
-	        for (Player player : state.getActivePlayers()) {
-	            if (!tiedPlayers.contains(player)) {
-	                tiebreakerVoters.add(player);
-	            }
-	        }*/
-	        
-	        //Shift to tiebreaker if tie exists
-	    	messages.add(new Message(MessageType.PHASE_CHANGE, GameState.GamePhase.TIEBREAKER.name()));
-	        return messages;
-	    }
-	    
-	    String eliminatedName = tiedPlayers.get(0);
-	    Player eliminated = state.getActivePlayers().stream().filter(p -> p.getName().equals(eliminatedName)).findFirst().orElse(null);
 
-	    if (eliminated != null) {
-	        messages.addAll(gameOverPhase(eliminated));
-	    }
-	    
-	    return messages;
-	}
-	
-	//Tiebreaker round
-	/*private List<Message> tieBreaker(Scanner scanner, List<Player> tiedPlayers) {
-	    System.out.println("\nTIEBREAKER ROUND");
-	    System.out.println("Tied players can now defend themselves.");
+	public void receiveVote(String voterName, String votedName) {
+		System.out.println("[DEBUG] receiveVote - Voter: " + voterName + ", Voted: " + votedName);
+		System.out.println("[DEBUG] Current phase: " + state.getPhase());
 
-	    //Defending statements
-	    Map<Player, String> statements = new HashMap<>();
+		synchronized (voteLock) {
+			// Check if this player already voted
+			if (votes.containsKey(voterName)) {
+				System.out.println("[DEBUG] Player " + voterName + " already voted! Ignoring duplicate.");
+				sendToPlayer(voterName, new Message(MessageType.ERROR, "You already voted!"));
+				return;
+			}
 
-	    for (Player players : tiedPlayers) {
-	        System.out.println("\n" + players.getName() + ", you have 30 seconds to defend yourself.");
-	        System.out.print("Enter your statement: ");
-	        String statement = scanner.nextLine().trim();
-	        statements.put(players, statement);
-	    }
+			boolean isValidVote = false;
+			List<String> validOptions = new ArrayList<>();
 
-	    //Display statements
-	    System.out.println("\nDefending Statements");
-	    for (Player players : tiedPlayers) {
-	        System.out.println(players.getName() + ": " + statements.get(players));
-	    }
+			if (state.getPhase() == GameState.GamePhase.VOTING) {
+				// Get all active players as valid options
+				validOptions = state.getActivePlayers().stream()
+						.map(Player::getName)
+						.collect(Collectors.toList());
+				isValidVote = validOptions.contains(votedName);
 
-	    //Initialization if tied player voting map
-	    Map<Player, Integer> votes = new HashMap<>();
-	    for (Player p : tiedPlayers) {
-	        votes.put(p, 0);
-	    }
-	    
-	    //Voting of tied players
-	    List<Player> voters = new ArrayList<>();
-	    for (Player players : state.getActivePlayers()) {
-	    	if (!tiedPlayers.contains(players)) {
-	    		voters.add(players);
-	    	}
-	    }
-	    
-	    //Voting only for non-tied players
-	    for (Player voter : voters) {
-	        System.out.println("\n" + voter.getName() + ", vote among tied players:");
+			} else if (state.getPhase() == GameState.GamePhase.TIEBREAKER) {
+				// Get tied players as valid options
+				// Need to get tied players from current tiebreaker
+				// For now, get all active players
+				validOptions = state.getActivePlayers().stream()
+						.map(Player::getName)
+						.collect(Collectors.toList());
+				isValidVote = validOptions.contains(votedName);
+			}
 
-	        for (int i = 0; i < tiedPlayers.size(); i++) {
-	            System.out.println((i + 1) + ". " + tiedPlayers.get(i).getName());
-	        }
+			if (!isValidVote) {
+				System.out.println("[GAME] Invalid vote from " + voterName + " for '" + votedName + "'");
+				System.out.println("[GAME] Valid options: " + validOptions);
 
-	        int choice;
-	        while (true) {
-	            System.out.print("Enter number: ");
-	            try {
-	                choice = Integer.parseInt(scanner.nextLine().trim()) - 1;
-	                if (choice >= 0 && choice < tiedPlayers.size()) {
-	                	break;
-	                }
-	                System.out.println("Invalid choice. Try again.");
-	            } catch (NumberFormatException e) {
-					System.out.println("Input a number.");
-				}
-	        }
+				// Send error and ask for vote again
+				String errorMsg = "Invalid vote! '" + votedName + "' is not a valid option.\nValid options: " + String.join(", ", validOptions) + "\nPlease vote again:";
+				sendToPlayer(voterName, new Message(MessageType.ERROR, errorMsg));
 
-	        Player voted = tiedPlayers.get(choice);
-	        votes.put(voted, votes.get(voted) + 1);
-	    }
+				// Send the vote prompt again
+				String votableList = String.join(", ", validOptions);
+				sendToPlayer(voterName, new Message(MessageType.VOTE, "Your turn to vote. Options: " + votableList));
+				return; // Don't count this vote, wait for retry
+			}
 
-	    //Get eliminated player
-	    Player eliminated = votes.entrySet().stream().max(Map.Entry.comparingByValue()).get().getKey();
-	    return eliminated;
-	}*/
-	
-	
-	//Resets all submitted words per round
-	private void resetSubmittedWords() {
-		for (Player player : state.getPlayers()) {
-			player.setSubmittedWord(null);
+			sendToPlayer(voterName, new Message(MessageType.VOTE_ACCEPTED, "Your vote for '" + votedName + "' has been recorded!"));
+			// Valid vote - count it
+			votes.put(voterName, votedName);
+
+			if (state.getPhase() == GameState.GamePhase.VOTING) {
+				voteCount++;
+				System.out.println("[GAME] Vote " + voteCount + ": " + voterName + " -> " + votedName);
+				server.broadcast(new Message(MessageType.SEND_WORD, "[VOTE] " + voterName + " voted for " + votedName));
+			} else if (state.getPhase() == GameState.GamePhase.TIEBREAKER) {
+				tieVoteCount++;
+				System.out.println("[GAME] Tiebreaker vote " + tieVoteCount + ": " + voterName + " -> " + votedName);
+				server.broadcast(new Message(MessageType.SEND_STATEMENT, "[VOTE] " + voterName + " voted for " + votedName));
+			}
+
+			voteLock.notifyAll();
 		}
 	}
-	
-	//Checks for end game conditions
-	private List<Message> gameOverPhase(Player eliminated) {
-		List<Message> messages = new ArrayList<>();
-		//Set player as eliminated
-		eliminated.setEliminated(true);
-		messages.add(new Message(MessageType.PLAYER_ELIMINATED, eliminated.getName()));
-		
-		//Get current active players
-		List<Player> activePlayers = state.getActivePlayers();
-		
-		//Checks if impostor is still alive by if Impostor is still there
-		boolean impostorAlive = activePlayers.stream().anyMatch(p -> p.getRole() == Player.Role.IMPOSTOR);
-		
-		String impostorName = state.getPlayers().stream().filter(p -> p.getRole() == Player.Role.IMPOSTOR).findFirst().get().getName();
-		//Crewmate Win
-		if (!impostorAlive) {
-			messages.add(new Message(MessageType.CREWMATES_WIN, impostorName));
-			state.setPhase(GameState.GamePhase.GAME_OVER);
-			return messages;
+
+	public void receiveStatement(String playerName, String statement) {
+		synchronized (voteLock) {
+			if (!tieStatements.containsKey(playerName)) {
+				tieStatements.put(playerName, statement);
+				statementCount++;
+				System.out.println("[GAME] Statement from " + playerName + ": " + statement);
+				server.broadcast(new Message(MessageType.SEND_STATEMENT, playerName + " said: \"" + statement + "\""));
+				voteLock.notifyAll();
+			}
 		}
-		
-		if (activePlayers.size() <= 2 && impostorAlive) {
-			messages.add(new Message(MessageType.IMPOSTOR_WINS, impostorName));
-			state.setPhase(GameState.GamePhase.GAME_OVER);
-			return messages;
-		}
-		
-		state.nextRound();
-		resetSubmittedWords();
-		//playersWhoVoted.clear();
-		messages.add(new Message(MessageType.PHASE_CHANGE, GameState.GamePhase.WORD_SUBMITTING.name()));
-		
-		return messages;
-	}
-	
-	//ADDITIONAL GETTS FOR SERVER to check current players
-	public List<Player> getPlayers(){
-		return state.getActivePlayers();
 	}
 }
