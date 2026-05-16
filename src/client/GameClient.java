@@ -118,18 +118,15 @@ public class GameClient {
 
         switch (currentPrompt) {
             case "WORD":
+                // Send the word to server
                 sendMessage(new Message(MessageType.SEND_WORD, playerName, input));
-                System.out.println("[OK] Word submitted! Waiting for other players...\n");
-                waitingForInput = false;
-                currentPrompt = null;
-                isMyTurn = false;
+                System.out.println("Submitting word...");
+                // IMPORTANT: Do NOT clear waitingForInput here
+                // Wait for server response (accept or reject)
                 break;
             case "VOTE":
-                // Send the vote - server will validate
                 System.out.println("[VOTE] Casting vote for: " + input);
                 sendMessage(new Message(MessageType.VOTE, playerName, input));
-                // Don't clear waitingForInput yet - wait for server response
-                // Server will either accept (then we clear) or reject (then we retry)
                 System.out.println("Waiting for server to validate vote...");
                 break;
             case "STATEMENT":
@@ -217,7 +214,7 @@ public class GameClient {
                     System.out.println("\n[TURN] " + message.getSender() + " " + message.getContent());
                     isMyTurn = false;
                 } else if (message.getContent() != null && message.getContent().contains("YOUR TURN")) {
-                    // It's my turn
+                    // It's my turn - only prompt if not already waiting for input
                     if (!waitingForInput) {
                         isMyTurn = true;
                         waitingForInput = true;
@@ -317,6 +314,14 @@ public class GameClient {
                 System.out.println("[OK] " + message.getContent());
                 waitingForInput = false;
                 currentPrompt = null;
+                break;
+
+            case WORD_ACCEPTED:
+                System.out.println("[OK] " + message.getContent());
+                System.out.println("Waiting for other players...\n");
+                waitingForInput = false;
+                currentPrompt = null;
+                isMyTurn = false;
                 break;
 
             case ERROR:

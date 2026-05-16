@@ -403,20 +403,36 @@ public class GameController {
 		}
 	}
 
+	// Called from ClientHandler when player submits word
 	public void receiveWord(String playerName, String word) {
+		System.out.println("[DEBUG] receiveWord called for " + playerName + " with word: " + word);
+
 		for (Player player : state.getActivePlayers()) {
 			if (player.getName().equals(playerName)) {
-				if (player.getRole() == Player.Role.CREWMATE && word.equalsIgnoreCase(state.getSecretWord())) {
-					sendToPlayer(playerName, new Message(MessageType.ERROR, "You cannot submit the secret word!"));
-					return;
-				}
 
+				// =============================================
+				// VALIDATION FIRST - Before anything else
+				// =============================================
+				// Check if crewmate is trying to submit the secret word
+				if (player.getRole() == Player.Role.CREWMATE && word.equalsIgnoreCase(state.getSecretWord())) {
+					System.out.println("[GAME] " + playerName + " tried to submit the secret word!");
+					sendToPlayer(playerName, new Message(MessageType.ERROR, "You cannot submit the secret word! Please try again:"));
+					// Send turn prompt again
+					sendToPlayer(playerName, new Message(MessageType.TURN, "YOUR TURN! Enter a word related to the secret word (cannot be the secret word itself):"));
+					return; // Exit immediately - do NOT accept the word
+				}
+				// =============================================
+				// Only accept valid words
 				player.setSubmittedWord(word);
 				turnCompleted = true;
 				submittedCount++;
 				System.out.println("[GAME] " + playerName + " submitted: " + word);
+
+				// Send acceptance confirmation to the player
+				sendToPlayer(playerName, new Message(MessageType.WORD_ACCEPTED, "Your word has been accepted!"));
+
+				// Broadcast to all players
 				server.broadcast(new Message(MessageType.SEND_WORD, playerName, word));
-				break;
 			}
 		}
 	}
