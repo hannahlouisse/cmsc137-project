@@ -1,56 +1,49 @@
 package main;
 
-import java.util.Scanner;
-import server.GameServer;
-import client.GameClient;
+import controller.ScreenController;
+import javafx.application.Application;
+import javafx.scene.Scene;
+import javafx.scene.layout.StackPane;
+import javafx.stage.Stage;
 
-public class Main {
+public class Main extends Application {
 
-	public static void main(String[] args) {
-		Scanner scanner = new Scanner(System.in);
+    @Override
+    public void start(Stage stage) {
 
-		System.out.println("=========================================");
-		System.out.println("     GUESS THE IMPOSTOR");
-		System.out.println("=========================================");
-		System.out.println("1. Start Server");
-		System.out.println("2. Start Client");
-		System.out.print("Choose (1/2): ");
+        StackPane root = new StackPane();
 
-		String choice = scanner.nextLine().trim();
+        StackPane backgroundLayer = new StackPane();
 
-		if (choice.equals("1")) {
-			// Start as server
-			System.out.print("Enter port (12345): ");
-			String portInput = scanner.nextLine();
-			int port = portInput.isEmpty() ? 12345 : Integer.parseInt(portInput);
+        StackPane screenLayer = new StackPane();
 
-			GameServer server = new GameServer(port);
-			server.start();
+        root.getChildren().addAll(
+                backgroundLayer,
+                screenLayer
+        );
 
-			System.out.println("Server running. Press Enter to stop...");
-			scanner.nextLine();
-			server.stop();
+        Scene scene = new Scene(root, 1280, 720);
 
-		} else if (choice.equals("2")) {
-			// Start as client
-			System.out.print("Enter server address (localhost): ");
-			String address = scanner.nextLine();
-			if (address.isEmpty()) address = "localhost";
+        ScreenController screenController = new ScreenController(
+                stage,
+                scene,
+                backgroundLayer,
+                screenLayer
+        );
 
-			System.out.print("Enter port (12345): ");
-			String portInput = scanner.nextLine();
-			int port = portInput.isEmpty() ? 12345 : Integer.parseInt(portInput);
+        screenController.initialize();
 
-			GameClient client = new GameClient(address, port);
+        stage.setTitle("Guess The Impostor");
 
-			// Wait for client to finish
-			try {
-				Thread.sleep(1000);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-		}
+        stage.setScene(scene);
 
-		scanner.close();
-	}
+        stage.setMinWidth(640);
+        stage.setMinHeight(360);
+
+        stage.show();
+    }
+
+    public static void main(String[] args) {
+        launch();
+    }
 }

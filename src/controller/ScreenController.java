@@ -1,58 +1,187 @@
 package controller;
 
-//import client.GameClient;
+import javafx.application.Platform;
+import javafx.scene.Scene;
+import javafx.scene.layout.StackPane;
+import javafx.scene.media.Media;
+import javafx.scene.media.MediaPlayer;
+import javafx.scene.media.MediaView;
+import javafx.stage.Stage;
 
-public class ScreenController {
-    //private GameClient gameClient;
-    private String currentScreen;
+import client.GameClient;
+import server.GameServer;
+import utils.MessageType;
+import utils.Player;
+import utils.Message;
 
-    public ScreenController() {
-        //this.gameClient = gameClient;
-        this.currentScreen = "TITLE";
+import view.*;
+
+import java.util.List;
+
+public class ScreenController implements GameEventListener {
+
+    private final Stage stage;
+    private final Scene scene;
+    private final StackPane backgroundLayer;
+    private final StackPane screenLayer;
+
+    private MediaPlayer mediaPlayer;
+    private GameClient client;
+    private GameServer server;
+
+    private GameEventListener activeScreen;
+
+    public ScreenController(Stage stage,
+                            Scene scene,
+                            StackPane backgroundLayer,
+                            StackPane screenLayer) {
+
+        this.stage = stage;
+        this.scene = scene;
+        this.backgroundLayer = backgroundLayer;
+        this.screenLayer = screenLayer;
     }
 
-    public void showSecretWord(String word) {
-        System.out.println("[SCREEN] Showing secret word: " + word);
-        // In GUI implementation, update the display
+    public void initialize() {
+        setupBackground();
+        showTitleScreen();
     }
 
-    public void showTurn(String message) {
-        System.out.println("[SCREEN] Turn notification: " + message);
-        // In GUI implementation, show input field
+    public void setClient(GameClient client) {
+        this.client = client;
+        this.client.setListener(this);
     }
 
-    public void showVotingOptions(String options) {
-        System.out.println("[SCREEN] Voting options: " + options);
-        // In GUI implementation, show voting buttons
+    public GameClient getClient() {
+        return client;
     }
 
-    public void showTiebreaker(String message) {
-        System.out.println("[SCREEN] Tiebreaker: " + message);
-        // In GUI implementation, show statement input
+    public void setServer(GameServer server) {
+        this.server = server;
     }
 
-    public void showSubmittedWords(String words) {
-        System.out.println("[SCREEN] Submitted words:\n" + words);
-        // In GUI implementation, show word list
+    public GameServer getServer() {
+        return server;
     }
 
-    public void showElimination(String playerName) {
-        System.out.println("[SCREEN] Player eliminated: " + playerName);
-        // In GUI implementation, update player list
+    private void setupBackground() {
+
+        try {
+            String path = getClass()
+                    .getResource("/assets/titleScreenBg.mp4")
+                    .toExternalForm();
+
+            mediaPlayer = new MediaPlayer(new Media(path));
+            mediaPlayer.setCycleCount(MediaPlayer.INDEFINITE);
+            mediaPlayer.setAutoPlay(true);
+
+            MediaView view = new MediaView(mediaPlayer);
+
+            view.fitWidthProperty().bind(scene.widthProperty());
+            view.fitHeightProperty().bind(scene.heightProperty());
+            view.setPreserveRatio(false);
+
+            backgroundLayer.getChildren().add(view);
+
+        } catch (Exception e) {
+            System.err.println("[SCREEN] Background failed");
+        }
     }
 
-    public void changePhase(String phase) {
-        currentScreen = phase;
-        System.out.println("[SCREEN] Phase changed to: " + phase);
-        // In GUI implementation, switch screens
+    public void showTitleScreen() {
+        setActiveScreen(null);
+        screenLayer.getChildren().setAll(new TitleScreen(this).createContent());
     }
 
-    public void showGameOver(String winner, String impostorName) {
-        System.out.println("[SCREEN] GAME OVER - Winner: " + winner + ", Impostor: " + impostorName);
-        // In GUI implementation, show game over screen
+    public void showHostScreen(String name) {
+        setActiveScreen(null);
+        screenLayer.getChildren().setAll(new HostScreen(this, name).createContent());
     }
 
-    public String getCurrentScreen() {
-        return currentScreen;
+    public void showPlayerScreen(String name) {
+        setActiveScreen(null);
+        screenLayer.getChildren().setAll(new PlayerScreen(this, name).createContent());
+    }
+
+    public void showWaitingScreen() {
+        setActiveScreen(null);
+
+        if (client == null) return;
+
+        screenLayer.getChildren().setAll(
+                new WaitingScreen(this, client).createContent()
+        );
+    }
+
+    public void showGameScreen() {
+
+        Platform.runLater(() -> {
+
+            GameScreen screen = new GameScreen(() -> client, this);
+
+            setActiveScreen(screen);
+
+            screenLayer.getChildren().setAll(screen.createContent());
+
+            mediaPlayer.stop();
+        });
+    }
+
+    public void setActiveScreen(GameEventListener listener) {
+        this.activeScreen = listener;
+    }
+
+    private void route(GameEventListenerAction action) {
+        if (activeScreen == null) return;
+        Platform.runLater(action::run);
+    }
+
+    private interface GameEventListenerAction {
+        void run();
+    }
+
+    @Override
+    public void onPlayersUpdated(List<Player> players) {
+        route(() -> activeScreen.onPlayersUpdated(players));
+    }
+
+    @Override
+    public void onMessage(String message) {
+        route(() -> activeScreen.onMessage(message));
+    }
+
+    @Override
+    public void onStartGame() {
+        showGameScreen();
+    }
+
+    @Override
+    public void onPhaseChange(String phase) {
+        route(() -> activeScreen.onPhaseChange(phase));
+    }
+
+    @Override
+    public void onSecretWord(String word) {
+        route(() -> activeScreen.onSecretWord(word));
+    }
+
+    @Override
+    public void onImpostorMessage() {
+        route(() -> activeScreen.onImpostorMessage());
+    }
+
+    @Override
+    public void onGameOver(String message) {
+        route(() -> activeScreen.onGameOver(message));
+    }
+
+    @Override
+    public void onInputEnabled(MessageType type) {
+        route(() -> activeScreen.onInputEnabled(type));
+    }
+
+    @Override
+    public void onInputDisabled() {
+        route(() -> activeScreen.onInputDisabled());
     }
 }
