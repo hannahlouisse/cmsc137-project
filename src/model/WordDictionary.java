@@ -6,9 +6,16 @@ import java.util.Random;
 
 public class WordDictionary {
 	private static final List<String> WORD_DICTIONARY = Arrays.asList(
-			"CMSC137", "Networking", "Milestone", "Project",
-			"Computer", "Algorithm", "Database", "Security",
-			"JavaScript", "Python", "Java", "Programming"
+			"Computer Science", "Networking", "Languages", "Social Media",
+			"Fruits", "Algorithm", "Applications", "Gaming",
+			"Steam", "Filipino Food", "Animals on Water", "Programming", 
+			"Disney Songs", "Singer Icons", "Michael Jackson", "Tradition", 
+			"Pet Peeve", "Pedestrian Lane", "CHristmas", "School", "Summer",
+			"Seasons", "Coffee", "Harry Potter", "Song Albums", "Road Trip",
+			"Sem Starter/Ender", "Rush Hour", "Gas", "Graduation", "Sunscreen",
+			"Makeup", "Birthday", "Vending Machine", "Trash Can", "Photo Booth",
+			"Photography", "Amusement Park", "Aquarium", "Library", "Canteen",
+			"Karaoke"
 	);
 
 	public static String getRandomWord() {
