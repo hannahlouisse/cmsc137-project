@@ -10,6 +10,7 @@
 7. Right click `Main.java` under src\main and click Run As. Under Run As, click Run Configurations
 8. In Main Tab, make sure main.Main is written as the Main class
 9. In Arguments Tab, add the following commands
+
 --module-path <actual_path_to_javafx_lib_folder> --add-modules javafx.controls,javafx.fxml,javafx.media
 
 --enable-native-access=javafx.graphics
