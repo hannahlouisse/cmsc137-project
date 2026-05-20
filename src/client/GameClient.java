@@ -114,7 +114,7 @@ public class GameClient {
                     String sender = message.getSender();
 
                     if (sender != null) {
-                        listener.onMessage(sender + ": " + message.getContent());
+                        listener.onMessage(sender + " : " + message.getContent());
                     }
                 }
                 
@@ -123,12 +123,12 @@ public class GameClient {
                 }
 
                 case CREWMATES_WIN -> {
-                    listener.onGameOver("\nCREWMATES WIN!\nThe impostor was " + message.getContent() + ".");
+                    listener.onGameOver("\nCREWMATES WIN!\nThe impostor was " + message.getContent());
                 }
 
                 case IMPOSTOR_WINS -> {
 
-                    listener.onGameOver("\nIMPOSTOR WINS!\nThe impostor was " + message.getContent() + ".");
+                    listener.onGameOver("\nIMPOSTOR WINS!\nThe impostor was " + message.getContent());
                 }
                 
                 case ENABLE_INPUT -> {

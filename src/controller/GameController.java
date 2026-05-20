@@ -176,7 +176,7 @@ public class GameController {
                 ""
         );
 
-        server.broadcastSystem(playerName + " submitted a word.");
+        server.broadcastSystem(playerName + " : " + word);
 
         currentTurnIndex++;
 
@@ -189,7 +189,7 @@ public class GameController {
 
         // summary
         for (Player p : state.getActivePlayers()) {
-            String text = p.getName() + ": " + p.getSubmittedWord();
+            String text = p.getName() + " : " + p.getSubmittedWord();
 
             server.broadcast(
                     new Message(
@@ -278,7 +278,7 @@ public class GameController {
 
         sendTo(voterPlayer, MessageType.DISABLE_INPUT, "");
 
-        sendSystem(voterPlayer, "You voted " + target);
+        sendSystem(voterPlayer, "(You voted " + target + ")");
 
         server.broadcastSystem(voter + " has voted.");
 
@@ -309,7 +309,7 @@ public class GameController {
         server.broadcastSystem("\n----- Voting Results -----");
 
         for (Map.Entry<String, Integer> e : tally.entrySet()) {
-            server.broadcastSystem(e.getKey() + ": " + e.getValue() + " votes");
+            server.broadcastSystem(e.getKey() + " : " + e.getValue() + " votes");
         }
 
         int max = Collections.max(tally.values());
@@ -342,7 +342,7 @@ public class GameController {
         server.broadcastSystem("\nTie detected!");
 
         server.broadcastSystem(
-                "Tied players: " +
+                "Tied players : " +
                 String.join(", ", tiedPlayers)
         );
 
@@ -420,7 +420,7 @@ public class GameController {
         server.broadcast(
                 new Message(
                         MessageType.SYSTEM,
-                        player + ": " + statement
+                        player + " : " + statement
                 )
         );
 
@@ -434,7 +434,7 @@ public class GameController {
         server.broadcastSystem("\n----- Defense Statements -----");
 
         for (Map.Entry<String, String> e : tieStatements.entrySet()) {
-            server.broadcastSystem(e.getKey() + ": " + e.getValue());
+            server.broadcastSystem(e.getKey() + " : " + e.getValue());
         }
 
         startTieBreakerVoting();
