@@ -54,8 +54,6 @@ public class GameController {
     }
 
     public void startGame() {
-    	
-        server.broadcastSystem("Game starts now!");
         startWordPhase();
     }
 
@@ -234,7 +232,7 @@ public class GameController {
                 .toList();
 
         server.broadcastSystem(
-                "\nVote for the impostor. Type EXACT name.\n--- Options ---\n" +
+                "\nVote for the impostor. Type their name.\n--- Options ---\n" +
                 String.join("\n", options) + "\n"
         );
     }
@@ -254,7 +252,11 @@ public class GameController {
         }
 
         // validate vote input
-        Player targetPlayer = find(target);
+        Player targetPlayer = state.getActivePlayers()
+                .stream()
+                .filter(p -> p.getName().equalsIgnoreCase(target))
+                .findFirst()
+                .orElse(null);
 
         if (targetPlayer == null) {
             sendError(voter, "Invalid vote.");
@@ -274,7 +276,7 @@ public class GameController {
         }
 
         // valid vote
-        votes.put(voter, target);
+        votes.put(voter, targetPlayer.getName());
 
         sendTo(voterPlayer, MessageType.DISABLE_INPUT, "");
 
@@ -378,7 +380,7 @@ public class GameController {
 
         votes.clear();
 
-        server.broadcastSystem("\nVote for the impostor. Type EXACT name.");
+        server.broadcastSystem("\nVote for the impostor. Type their name.");
 
         List<Player> active = state.getActivePlayers();
 

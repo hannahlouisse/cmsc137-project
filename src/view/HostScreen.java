@@ -225,4 +225,5 @@ public class HostScreen implements GameEventListener {
     @Override public void onGameOver(String message) {}
     @Override public void onInputEnabled(MessageType inputType) {}
     @Override public void onInputDisabled() {}
+    @Override public void onNameAccepted() {}
 }

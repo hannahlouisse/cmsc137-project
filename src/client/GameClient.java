@@ -101,6 +101,14 @@ public class GameClient {
                 case SYSTEM -> {
                     listener.onMessage(message.getContent());
                 }
+                
+                case NAME_ACCEPTED -> {
+                    listener.onNameAccepted();
+                }
+
+                case NAME_TAKEN -> {
+                    listener.onMessage(message.getContent());
+                }
 
                 case SEND_SECRET -> {
                     listener.onSecretWord(message.getContent());

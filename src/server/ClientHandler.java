@@ -95,10 +95,23 @@ public class ClientHandler implements Runnable {
             sendMessage(new Message(MessageType.ERROR, "Invalid name"));
             return;
         }
+        
+        boolean exists = server.getClients()
+                .stream()
+                .anyMatch(c ->
+                        c.getPlayerName() != null &&
+                        c.getPlayerName().equalsIgnoreCase(name)
+                );
+
+        if (exists) {
+            sendMessage(new Message(MessageType.NAME_TAKEN, "Name already taken"));
+            disconnect();
+            return;
+        }
 
         player = new Player(name);
 
-        sendMessage(new Message(MessageType.SYSTEM, "Welcome " + name));
+        sendMessage(new Message(MessageType.NAME_ACCEPTED, ""));
 
         server.broadcastExcept(
                 new Message(MessageType.SYSTEM, name + " joined"),

@@ -125,4 +125,7 @@ public class WaitingScreen implements GameEventListener {
 
     @Override
     public void onInputDisabled() {}
+    
+    @Override
+    public void onNameAccepted() {}
 }

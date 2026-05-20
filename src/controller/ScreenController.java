@@ -30,6 +30,8 @@ public class ScreenController implements GameEventListener {
     private GameServer server;
 
     private GameEventListener activeScreen;
+    
+    private boolean hosting = false;
 
     public ScreenController(Stage stage,
                             Scene scene,
@@ -89,7 +91,8 @@ public class ScreenController implements GameEventListener {
     }
 
     public void showTitleScreen() {
-        setActiveScreen(null);
+    	hosting = false;
+    	setActiveScreen(null);
         screenLayer.getChildren().setAll(new TitleScreen(this).createContent());
     }
 
@@ -139,6 +142,10 @@ public class ScreenController implements GameEventListener {
     private interface GameEventListenerAction {
         void run();
     }
+    
+    public void setHosting(boolean hosting) {
+        this.hosting = hosting;
+    }
 
     @Override
     public void onPlayersUpdated(List<Player> players) {
@@ -183,5 +190,14 @@ public class ScreenController implements GameEventListener {
     @Override
     public void onInputDisabled() {
         route(() -> activeScreen.onInputDisabled());
+    }
+    
+    @Override
+    public void onNameAccepted() {
+        if (hosting) {
+            return;
+        }
+
+        Platform.runLater(this::showWaitingScreen);
     }
 }

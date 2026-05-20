@@ -38,6 +38,7 @@ public class PlayerScreen implements GameEventListener {
 
         this.screenController = screenController;
         this.playerName = playerName;
+        screenController.setActiveScreen(this);
     }
 
     public Parent createContent() {
@@ -54,7 +55,7 @@ public class PlayerScreen implements GameEventListener {
         titleText.setFont(Font.font("Arial", FontWeight.BOLD, 40));
 
         errorText.setFill(Color.RED);
-        errorText.setFont(Font.font("Arial", FontWeight.BOLD, 24));
+        errorText.setFont(Font.font("Arial", FontWeight.BOLD, 30));
 
         TextField ipField = new TextField();
         ipField.setPromptText("XXX.XXX.XX.X");
@@ -145,8 +146,6 @@ public class PlayerScreen implements GameEventListener {
             );
 
             screenController.setClient(client);
-
-            screenController.showWaitingScreen();
         });
 
         return root;
@@ -180,4 +179,5 @@ public class PlayerScreen implements GameEventListener {
     @Override public void onStartGame() {}
     @Override public void onInputEnabled(MessageType inputType) {}
     @Override public void onInputDisabled() {}
+    @Override public void onNameAccepted() {}
 }

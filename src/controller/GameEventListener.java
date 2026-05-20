@@ -24,4 +24,6 @@ public interface GameEventListener {
     void onInputEnabled(MessageType inputType);
     
     void onInputDisabled();
+    
+    void onNameAccepted();
 }

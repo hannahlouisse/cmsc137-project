@@ -164,6 +164,7 @@ public class TitleScreen {
                 screenController.setClient(client);
 
                 // OPEN HOST SCREEN
+                screenController.setHosting(true);
                 screenController.showHostScreen(playerName);
             }
         });

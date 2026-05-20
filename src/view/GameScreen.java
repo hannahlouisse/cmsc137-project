@@ -362,4 +362,7 @@ public class GameScreen implements GameEventListener {
             chatPanel.setInputDisabled(true);
         });
     }
+    
+    @Override
+    public void onNameAccepted() {}
 }
