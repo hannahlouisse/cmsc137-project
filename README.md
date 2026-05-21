@@ -3,7 +3,7 @@
 ## How to Run
 1. Install Java26 and any Java IDE. For this project, Eclipse IDE for Java Developers was installed and jdk version 26.0.1 was used. 
 2. Install JavaFX 26
-3. Right click the main project folder `cmsc137-project` and click Properties
+3. Right click the main project folder `cmsc137.project` and click Properties
 4. Click Java Build Path and go to the Libraries tab.
 5. Select the `Modulepath` folder and add javafx 26 jar files that is located on your javafx 26 installed folder under \lib
 6. Click Apply once done
