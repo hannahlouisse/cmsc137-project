@@ -35,7 +35,7 @@ A multiplayer game inspired by Among Us. At the start of the game, all players w
 
 `client`
 
-- 
+- `GameClient.java`: Handles the client-side networking and communication of the multiplayer game. It processes different game events such as player list, secret word distribution, game results and error handling.
 
 `model` 
     
@@ -55,9 +55,9 @@ A multiplayer game inspired by Among Us. At the start of the game, all players w
 
 `server`
 
-- `ClientHandler.java`:
+- `ClientHandler.java`: Manages the communication between the server and a single connected player of the game. It runs on a separate thread to continously listen and broadcast incoming messages from the player.
 
-- `GameServer.java`: 
+- `GameServer.java`: Hosts and manages the multiplayer game server. It accepts client connections through sockets and manages all active clients through thread for concurrent communication. Manages server setups, shutdown, disconnections and overall game state.
 
 `utils`
 
