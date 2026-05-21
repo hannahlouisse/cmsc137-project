@@ -9,7 +9,7 @@
 6. Click Apply once done
 7. Right click `Main.java` under src\main and click Run As. Under Run As, click Run Configurations
 8. In Main Tab, make sure main.Main is written as the Main class
-9. In Arguments Tab, add the following commands
+9. In Arguments Tab, add the following VM arguments:
 
 --module-path <actual_path_to_javafx_lib_folder> --add-modules javafx.controls,javafx.fxml,javafx.media
 
@@ -31,7 +31,7 @@ A multiplayer game inspired by Among Us. At the start of the game, all players w
 
 `assets`
 
-- 
+- Contains all the image and video files needed for the GUI.
 
 `client`
 
@@ -43,15 +43,13 @@ A multiplayer game inspired by Among Us. At the start of the game, all players w
     
 - `GameState.java`: Game State structure that holds the game's data, such as the current game phase, round number, secret word, and non-eliminated players.
 
-`view`
-
 `controller`
 
 - `GameController.java`: Contains the code that has the game logic. Assigns the player roles and secret word, and manages the game phases such as word submission, voting, tiebreaker and end game detection.
 
-- `GameEventListener.java`:
+- `GameEventListener.java`: Serves as the interface implemented by other classes so they can detect and react to events.
 
-- `ScreenController.java`:
+- `ScreenController.java`: In charge of displaying the different screens in the game.
 
 `server`
 
@@ -69,4 +67,16 @@ A multiplayer game inspired by Among Us. At the start of the game, all players w
 
 `view`
 
-- `ChatPanel.java`: 
+- `ChatPanel.java`: The chatbox shown on the right side of the game-proper screen where players see prompts, submit their words, and cast their votes.
+
+- `GameScreen.java`: The game-proper screen where players play the game.
+
+- `HostScreen.java`: The screen that appears upon clicking "Create Game". It displays the created server's IP address and the number of players connected.
+
+- `PlayerCard.java`: The player card shown on the left side of the game-proper screen containing each player's name and icon. A player's own name is colored blue in their view.
+
+- `PlayerScreen.java`: The screen that appears upon clicking "Join Game". This is where players will input the IP address of the server they want to connect to.
+
+- `TitleScreen.java`: The first screen that appears upon launching the game. It contains an input field where players will enter their name, and it contains the "Create Game" and "Join Game" buttons. "Create Game" allows a player to start a server, while "Join Game" allows a player to join a server.
+
+- `WaitingScreen.java`: The screen that appears after a player joins a server while the host hasn't started the game.
